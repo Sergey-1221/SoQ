@@ -1,69 +1,55 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.special import gammaln
 from scipy.optimize import minimize
+from scipy.stats import gamma
 
+# Read data
+x = np.loadtxt('part 2. input.csv')
 
-def negative_log_likelihood(params, data):
-    """
-    Negative log-likelihood function for the Gamma distribution.
-    :param params: Array of parameters [k (shape), theta (scale)].
-    :param data: Array of observed data points.
-    :return: Negative log-likelihood value.
-    """
-    k, theta = params[0], params[1]
-    if k <= 0 or theta <= 0:  # Constraints: k > 0, theta > 0
-        return np.inf
+# Compute constants
+n = len(x)
+x_bar = np.mean(x)
+s_log_x = np.sum(np.log(x))
 
-    n = len(data)
-    log_likelihood = (
-            n * (k * np.log(theta) - gammaln(k)) +
-            (k - 1) * np.sum(np.log(data)) - (1 / theta) * np.sum(data)
-    )
-    return -log_likelihood  # Negative because we are minimizing
+# Define negative log-likelihood function
+def nll(k):
+    if k <= 0:
+        return np.inf  # Return infinity if k is not positive
+    term1 = n * (k * (np.log(x_bar) - np.log(k) + 1) + gammaln(k))
+    term2 = - (k - 1) * s_log_x
+    return term1 + term2
 
+# Optimize nll(k)
+result = minimize(nll, x0=1.0, bounds=[(1e-6, None)], method='SLSQP')
 
-def estimate_gamma_parameters(data):
-    """
-    Estimate Gamma distribution parameters using Maximum Likelihood Estimation.
-    :param data: Array of observed data points.
-    :return: Estimated parameters k (shape) and theta (scale).
-    """
-    # Calculate sample mean and variance for better initial guesses
-    sample_mean = np.mean(data)
-    sample_variance = np.var(data)
-    initial_k = sample_mean ** 2 / sample_variance
-    initial_theta = sample_variance / sample_mean
+# Extract estimated k
+estimated_k = result.x[0]
 
-    # Initial guess for optimization
-    initial_guess = [initial_k, initial_theta]
+# Compute estimated θ
+estimated_theta = x_bar / estimated_k
 
-    # Minimize the negative log-likelihood
-    result = minimize(
-        negative_log_likelihood,
-        initial_guess,
-        args=(data,),
-        method="SLSQP",
-        bounds=[(1e-3, None), (1e-3, None)],  # Ensure k > 0, theta > 0
-    )
+# Print estimated values
+print(estimated_k, estimated_theta)
 
-    if result.success:
-        estimated_k, estimated_theta = result.x
-        return estimated_k, estimated_theta
-    else:
-        raise RuntimeError("Optimization failed: " + result.message)
+# Visualization
+# Plot histogram of data
+plt.hist(x, bins=30, density=True, alpha=0.6, color='g', label='Data Histogram')
 
+# Generate values for x-axis
+x_values = np.linspace(min(x), max(x), 1000)
 
-if __name__ == "__main__":
-    # Load data from CSV file
-    import pandas as pd
+# Compute estimated Gamma
+pdf_values = gamma.pdf(x_values, a=estimated_k, scale=estimated_theta)
 
-    data = pd.read_csv("part 2. input.csv").iloc[:, 0].values
+# Plot estimated Gamma
+plt.plot(x_values, pdf_values, 'r-', label='Estimated Gamma')
 
-    # Estimate Gamma parameters
-    estimated_k, estimated_theta = estimate_gamma_parameters(data)
+# Labels and title
+plt.xlabel('x')
+plt.ylabel('Density')
+plt.title('Histogram of Data with Estimated Gamma')
+plt.legend()
 
-    # Print estimated parameters
-    print(estimated_k, estimated_theta)
-
-
-    
+# Show plot
+plt.show()
